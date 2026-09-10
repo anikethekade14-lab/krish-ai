@@ -11,42 +11,54 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Extract project ZIP
+      - name: Extract project
         run: |
           mkdir -p android-project
           unzip -q krish-ai.zip -d android-project
 
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
       - name: Find Android project
         run: |
-          echo "Searching for Gradle project..."
-          find android-project -name "gradlew" -type f -print
+          echo "Searching project..."
+          find android-project -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" -o -name "build.gradle" -o -name "build.gradle.kts" \) -print
 
       - name: Build APK
         run: |
-          GRADLEW=$(find android-project -name "gradlew" -type f | head -n 1)
+          PROJECT_DIR=$(find android-project -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \) -exec dirname {} \; | head -n 1)
 
-          if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew not found"
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERROR: Android Gradle project not found"
+            echo "Project contents:"
+            find android-project -maxdepth 4 -type f | head -200
             exit 1
           fi
 
-          PROJECT_DIR=$(dirname "$GRADLEW")
+          echo "Project directory: $PROJECT_DIR"
           cd "$PROJECT_DIR"
 
-          chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          gradle assembleDebug --stacktrace
 
       - name: Find APK
         run: |
-          find . -type f -name "*.apk" -print
+          find android-project -type f -name "*.apk" -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: KRISH-AI-APK
           path: |
-            **/build/outputs/apk/debug/*.apk
+            android-project/**/build/outputs/apk/debug/*.apk
           if-no-files-found: error
